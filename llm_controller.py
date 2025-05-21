@@ -40,6 +40,7 @@ class OllamaController(BaseLLMController):
     def __init__(self, model: str = "llama2"):
         from ollama import chat
         self.model = model
+        self.timeout = 30  # 30 second timeout
     
     def _generate_empty_value(self, schema_type: str, schema_items: dict = None) -> Any:
         if schema_type == "array":
@@ -77,9 +78,11 @@ class OllamaController(BaseLLMController):
                     {"role": "user", "content": prompt}
                 ],
                 response_format=response_format,
+                timeout=self.timeout
             )
             return response.choices[0].message.content
         except Exception as e:
+            print(f"Ollama request failed: {str(e)}")
             empty_response = self._generate_empty_response(response_format)
             return json.dumps(empty_response)
 

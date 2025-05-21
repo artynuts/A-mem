@@ -232,7 +232,17 @@ class AgenticMemorySystem:
 
     def add_note(self, content: str, time: str = None, **kwargs) -> str:
         """Add a new memory note"""
-        # Create MemoryNote without llm_controller
+        # Generate metadata if not provided
+        if not any(key in kwargs for key in ['tags', 'keywords', 'context']):
+            analysis = self.analyze_content(content)
+            if 'tags' not in kwargs:
+                kwargs['tags'] = analysis.get('tags', [])
+            if 'keywords' not in kwargs:
+                kwargs['keywords'] = analysis.get('keywords', [])
+            if 'context' not in kwargs:
+                kwargs['context'] = analysis.get('context', 'General')
+                
+        # Create MemoryNote
         if time is not None:
             kwargs['timestamp'] = time
         note = MemoryNote(content=content, **kwargs)

@@ -9,8 +9,8 @@ class TestAgenticMemorySystem(unittest.TestCase):
         self.memory_system = AgenticMemorySystem(
             # model_name='sentence-transformers/paraphrase-mpnet-base-v2',
             model_name='all-MiniLM-L6-v2',
-            llm_backend="openai",
-            llm_model="gpt-4o-mini"
+            llm_backend="ollama",  # Changed from 'openai' to 'ollama'
+            llm_model="llama2"     # Changed from 'gpt-4o-mini' to 'llama2'
         )
         
     def test_create_memory(self):
@@ -270,6 +270,115 @@ class TestAgenticMemorySystem(unittest.TestCase):
         self.assertIsNotNone(processed_memory.tags)
         self.assertIsNotNone(processed_memory.context)
         self.assertIsNotNone(processed_memory.keywords)
+        
+    def test_research_assistant_scenario(self):
+        """Test a real-world scenario where the system acts as a research assistant
+        tracking papers and their relationships in AI/ML domain."""
+        
+        # Add several research paper summaries
+        transformer_paper = self.memory_system.add_note(
+            content="'Attention Is All You Need' introduces the Transformer architecture, "
+                   "eliminating the need for recurrence and convolutions in sequence tasks. "
+                   "Key innovations include multi-head self-attention mechanism.",
+            tags=["deep learning", "transformers", "attention mechanism"],
+            keywords=["transformer", "self-attention", "neural networks"],
+            category="Research Paper",
+            context="Fundamental paper that revolutionized NLP and became foundation for models like GPT and BERT"
+        )
+        
+        bert_paper = self.memory_system.add_note(
+            content="'BERT: Pre-training of Deep Bidirectional Transformers' demonstrates "
+                   "how pre-training and fine-tuning can create powerful language models. "
+                   "Introduces masked language modeling objective.",
+            tags=["deep learning", "BERT", "pre-training"],
+            keywords=["BERT", "transformers", "language modeling"],
+            category="Research Paper",
+            context="Built upon transformer architecture to create pre-trained models"
+        )
+        
+        gpt_paper = self.memory_system.add_note(
+            content="'Language Models are Few-Shot Learners' shows that scaling up language "
+                   "models leads to better few-shot learning abilities without task-specific "
+                   "fine-tuning.",
+            tags=["deep learning", "GPT", "few-shot learning"],
+            keywords=["GPT-3", "language models", "scaling"],
+            category="Research Paper",
+            context="Demonstrated emergent abilities in large language models"
+        )
+        
+        # Create relationships between papers
+        bert = self.memory_system.read(bert_paper)
+        bert.links.append(transformer_paper)  # BERT builds on Transformer
+        self.memory_system.update(bert_paper, links=bert.links)
+        
+        gpt = self.memory_system.read(gpt_paper)
+        gpt.links.append(transformer_paper)  # GPT also builds on Transformer
+        self.memory_system.update(gpt_paper, links=gpt.links)
+        
+        # Test finding related papers about transformers
+        results = self.memory_system.search_agentic("transformer architecture applications", k=3)
+        self.assertEqual(len(results), 3)  # Should find all three papers
+        
+        # Test finding specific implementation details
+        attention_results = self.memory_system.search_agentic("attention mechanism implementation", k=1)
+        self.assertIn("multi-head self-attention", attention_results[0]['content'])
+        
+        # Test finding papers that built upon transformers
+        raw_results = self.memory_system.find_related_memories_raw("transformer", k=2)
+        self.assertGreaterEqual(len(raw_results), 2)  # Should find at least BERT and GPT papers
+        
+        # Test evolution of knowledge
+        # Add a new finding about transformers
+        update_note = "Recent studies show transformers excel in computer vision tasks too."
+        transformer_memory = self.memory_system.read(transformer_paper)
+        transformer_memory.content += " " + update_note
+        
+        # Update the paper with new information
+        self.memory_system.update(
+            transformer_paper,
+            content=transformer_memory.content,
+            tags=transformer_memory.tags + ["computer vision"],
+            keywords=transformer_memory.keywords + ["vision transformers"]
+        )
+        
+        # Verify the knowledge evolution
+        updated_results = self.memory_system.search_agentic("transformers in vision", k=1)
+        self.assertIn("vision", updated_results[0]['content'])
+
+    def test_automatic_metadata_generation(self):
+        """Test that the system automatically generates metadata when only content is provided."""
+        
+        # Add a note with only content
+        content = "The transformer architecture revolutionized natural language processing by introducing self-attention mechanisms that can process sequences in parallel."
+        memory_id = self.memory_system.add_note(content=content)
+        
+        # Retrieve the memory and check that metadata was automatically generated
+        memory = self.memory_system.read(memory_id)
+        
+        # Verify that the system generated these automatically
+        self.assertIsNotNone(memory.tags)
+        self.assertIsNotNone(memory.keywords)
+        self.assertIsNotNone(memory.context)
+        self.assertTrue(len(memory.tags) > 0, "Tags should be automatically generated")
+        self.assertTrue(len(memory.keywords) > 0, "Keywords should be automatically generated")
+        self.assertTrue(len(memory.context) > 0, "Context should be automatically generated")
+        
+        print("\nAutomatically generated metadata:")
+        print(f"Tags: {memory.tags}")
+        print(f"Keywords: {memory.keywords}")
+        print(f"Context: {memory.context}")        # Add another related note to test automatic relationship detection
+        second_content = "BERT models use bidirectional training of the transformer architecture to understand context better."
+        second_id = self.memory_system.add_note(content=second_content)        # The system should automatically detect the relationship through content similarity
+        results = self.memory_system.find_related_memories("BERT", k=1)
+        self.assertGreater(len(results), 0)
+        
+        print("\nResults from find_related_memories:")
+        print(json.dumps(results, indent=2))
+        
+        # Parse and check the result for BERT reference
+        # Results are returned as a list of strings, each containing tab-separated metadata
+        result_str = results[0]
+        self.assertIn("BERT", result_str)
 
 if __name__ == '__main__':
     unittest.main()
